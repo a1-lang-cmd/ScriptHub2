@@ -1,0 +1,236 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Create the control GUI
+local controlGui = Instance.new("ScreenGui")
+controlGui.Name = "XRayControl"
+controlGui.ResetOnSpawn = false
+controlGui.Parent = playerGui
+
+-- Main frame (draggable)
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 200, 0, 80)
+mainFrame.Position = UDim2.new(0.5, -100, 0.1, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = controlGui
+
+-- Add rounded corners
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = mainFrame
+
+-- Title bar
+local titleBar = Instance.new("TextLabel")
+titleBar.Size = UDim2.new(1, 0, 0, 25)
+titleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+titleBar.BorderSizePixel = 0
+titleBar.Text = "X-Ray Control"
+titleBar.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleBar.Font = Enum.Font.GothamBold
+titleBar.TextSize = 12
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 8)
+titleCorner.Parent = titleBar
+
+-- Close button
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 20, 0, 20)
+closeButton.Position = UDim2.new(1, -23, 0, 2.5)
+closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeButton.BorderSizePixel = 0
+closeButton.Text = "X"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Font = Enum.Font.GothamBold
+closeButton.TextSize = 12
+closeButton.Parent = titleBar
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 4)
+closeCorner.Parent = closeButton
+
+-- Toggle button
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 160, 0, 35)
+toggleButton.Position = UDim2.new(0.5, -80, 0, 35)
+toggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+toggleButton.BorderSizePixel = 0
+toggleButton.Text = "X-Ray: OFF"
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Font = Enum.Font.Gotham
+toggleButton.TextSize = 11
+toggleButton.Parent = mainFrame
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 6)
+toggleCorner.Parent = toggleButton
+
+-- State variables
+local isXRayEnabled = false
+local billboardGuis = {}
+local connections = {}
+
+-- Function to create billboard GUI for a GameTable
+local function createBillboard(gameTable)
+    -- Try to find TableData and WordToGuess
+    local tableData = gameTable:FindFirstChild("TableData")
+    if not tableData then
+        warn("No TableData found in", gameTable.Name)
+        return
+    end
+    
+    local wordToGuess = tableData:FindFirstChild("WordToGuess")
+    if not wordToGuess then
+        warn("No WordToGuess found in TableData for", gameTable.Name)
+        return
+    end
+    
+    -- Find a part to attach the billboard to (preferably the main part of the table)
+    local attachPart = gameTable:FindFirstChildWhichIsA("BasePart", true)
+    if not attachPart then
+        warn("No part found in", gameTable.Name)
+        return
+    end
+    
+    -- Create billboard GUI
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "XRayBillboard"
+    billboard.Adornee = attachPart
+    billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = attachPart
+    
+    -- Create text label
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    textLabel.BackgroundTransparency = 0.3
+    textLabel.BorderSizePixel = 0
+    textLabel.Text = wordToGuess.Value
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.TextSize = 18
+    textLabel.TextStrokeTransparency = 0.5
+    textLabel.Parent = billboard
+    
+    local textCorner = Instance.new("UICorner")
+    textCorner.CornerRadius = UDim.new(0, 8)
+    textCorner.Parent = textLabel
+    
+    -- Store the billboard
+    table.insert(billboardGuis, billboard)
+    
+    -- Connect to value changes
+    local connection = wordToGuess:GetPropertyChangedSignal("Value"):Connect(function()
+        textLabel.Text = wordToGuess.Value
+    end)
+    table.insert(connections, connection)
+    
+    print("Created billboard for", gameTable.Name, "with word:", wordToGuess.Value)
+end
+
+-- Function to enable X-Ray
+local function enableXRay()
+    local gameTables = workspace:FindFirstChild("GameTables")
+    if not gameTables then
+        warn("GameTables not found in workspace!")
+        return
+    end
+    
+    -- Create billboards for all existing tables
+    for _, gameTable in pairs(gameTables:GetChildren()) do
+        createBillboard(gameTable)
+    end
+    
+    -- Watch for new tables being added
+    local addedConnection = gameTables.ChildAdded:Connect(function(child)
+        if isXRayEnabled then
+            task.wait(0.1) -- Wait for TableData to load
+            createBillboard(child)
+        end
+    end)
+    table.insert(connections, addedConnection)
+end
+
+-- Function to disable X-Ray
+local function disableXRay()
+    -- Remove all billboards
+    for _, billboard in pairs(billboardGuis) do
+        if billboard and billboard.Parent then
+            billboard:Destroy()
+        end
+    end
+    billboardGuis = {}
+    
+    -- Disconnect all connections
+    for _, connection in pairs(connections) do
+        if connection then
+            connection:Disconnect()
+        end
+    end
+    connections = {}
+end
+
+-- Toggle button functionality
+toggleButton.MouseButton1Click:Connect(function()
+    isXRayEnabled = not isXRayEnabled
+    
+    if isXRayEnabled then
+        toggleButton.Text = "X-Ray: ON"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+        enableXRay()
+    else
+        toggleButton.Text = "X-Ray: OFF"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        disableXRay()
+    end
+end)
+
+-- Close button functionality
+closeButton.MouseButton1Click:Connect(function()
+    disableXRay()
+    controlGui:Destroy()
+end)
+
+-- Dragging functionality
+local dragging = false
+local dragInput, mousePos, framePos
+
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        mousePos = input.Position
+        framePos = mainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+titleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - mousePos
+        mainFrame.Position = UDim2.new(
+            framePos.X.Scale,
+            framePos.X.Offset + delta.X,
+            framePos.Y.Scale,
+            framePos.Y.Offset + delta.Y
+        )
+    end
+end)
