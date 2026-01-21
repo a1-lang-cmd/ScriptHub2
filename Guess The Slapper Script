@@ -1,0 +1,186 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Wait for the meter and bar to exist
+local screenGui = playerGui:WaitForChild("ScreenGui")
+local meter = screenGui:WaitForChild("meter")
+local bar = meter:WaitForChild("color"):WaitForChild("bar")
+
+-- Create the control GUI
+local controlGui = Instance.new("ScreenGui")
+controlGui.Name = "BarLockControl"
+controlGui.ResetOnSpawn = false
+controlGui.Parent = playerGui
+
+-- Main frame (draggable)
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 200, 0, 80)
+mainFrame.Position = UDim2.new(0.5, -100, 0.1, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = controlGui
+
+-- Add rounded corners
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = mainFrame
+
+-- Title bar
+local titleBar = Instance.new("TextLabel")
+titleBar.Size = UDim2.new(1, 0, 0, 25)
+titleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+titleBar.BorderSizePixel = 0
+titleBar.Text = "Bar Lock Control"
+titleBar.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleBar.Font = Enum.Font.GothamBold
+titleBar.TextSize = 12
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 8)
+titleCorner.Parent = titleBar
+
+-- Close button
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 20, 0, 20)
+closeButton.Position = UDim2.new(1, -23, 0, 2.5)
+closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeButton.BorderSizePixel = 0
+closeButton.Text = "X"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Font = Enum.Font.GothamBold
+closeButton.TextSize = 12
+closeButton.Parent = titleBar
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 4)
+closeCorner.Parent = closeButton
+
+-- Toggle button
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 160, 0, 35)
+toggleButton.Position = UDim2.new(0.5, -80, 0, 35)
+toggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+toggleButton.BorderSizePixel = 0
+toggleButton.Text = "Lock Bar to Top: OFF"
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Font = Enum.Font.Gotham
+toggleButton.TextSize = 11
+toggleButton.Parent = mainFrame
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 6)
+toggleCorner.Parent = toggleButton
+
+-- State variables
+local isLocked = false
+local originalBarPosition = bar.Position
+local lockConnection = nil
+
+-- Offset from top (adjust this value to move bar lower or higher from the red top)
+local LOCK_OFFSET = 10 -- pixels from the top of the meter
+
+-- Function to lock bar to top of meter
+local function lockBarToTop()
+    if lockConnection then
+        lockConnection:Disconnect()
+    end
+    
+    -- Print debug info
+    print("Locking bar to top...")
+    print("Bar current position:", bar.Position)
+    print("Bar size:", bar.Size)
+    print("Bar AbsoluteSize:", bar.AbsoluteSize)
+    print("Bar AnchorPoint:", bar.AnchorPoint)
+    print("Meter size:", meter.AbsoluteSize)
+    
+    -- This runs every frame to force the bar to stay at the top
+    lockConnection = RunService.Heartbeat:Connect(function()
+        if isLocked then
+            -- Position 1 = TOP (red part), Position 0 = BOTTOM for this meter
+            -- The bar fills upward, so we want close to 1.0
+            local meterHeight = meter.AbsoluteSize.Y
+            local lockScale = 1 - (LOCK_OFFSET / meterHeight)
+            local newPos = UDim2.new(0, 0, lockScale, 0)
+            
+            -- Force update every frame
+            bar.Position = newPos
+        end
+    end)
+    
+    -- Also immediately set the position
+    local meterHeight = meter.AbsoluteSize.Y
+    local lockScale = 1 - (LOCK_OFFSET / meterHeight)
+    bar.Position = UDim2.new(0, 0, lockScale, 0)
+    print("Set bar to position:", bar.Position)
+    print("Lock scale calculated as:", lockScale)
+end
+
+-- Function to unlock bar
+local function unlockBar()
+    if lockConnection then
+        lockConnection:Disconnect()
+        lockConnection = nil
+    end
+end
+
+-- Toggle button functionality
+toggleButton.MouseButton1Click:Connect(function()
+    isLocked = not isLocked
+    
+    if isLocked then
+        toggleButton.Text = "Lock Bar to Top: ON"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+        lockBarToTop()
+    else
+        toggleButton.Text = "Lock Bar to Top: OFF"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        unlockBar()
+    end
+end)
+
+-- Close button functionality
+closeButton.MouseButton1Click:Connect(function()
+    unlockBar()
+    controlGui:Destroy()
+end)
+
+-- Dragging functionality
+local dragging = false
+local dragInput, mousePos, framePos
+
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        mousePos = input.Position
+        framePos = mainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+titleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - mousePos
+        mainFrame.Position = UDim2.new(
+            framePos.X.Scale,
+            framePos.X.Offset + delta.X,
+            framePos.Y.Scale,
+            framePos.Y.Offset + delta.Y
+        )
+    end
+end)
