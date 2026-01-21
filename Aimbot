@@ -1,0 +1,455 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Teams = game:GetService("Teams")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local playerGui = player:WaitForChild("PlayerGui")
+
+-- Create control GUI
+local controlGui = Instance.new("ScreenGui")
+controlGui.Name = "CameraLockControl"
+controlGui.ResetOnSpawn = false
+controlGui.Parent = playerGui
+
+-- Main frame (draggable)
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 220, 0, 180)
+mainFrame.Position = UDim2.new(0.5, -110, 0.1, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = controlGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = mainFrame
+
+-- Title bar
+local titleBar = Instance.new("TextLabel")
+titleBar.Size = UDim2.new(1, 0, 0, 25)
+titleBar.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+titleBar.BorderSizePixel = 0
+titleBar.Text = "Camera Lock-On"
+titleBar.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleBar.Font = Enum.Font.GothamBold
+titleBar.TextSize = 12
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 8)
+titleCorner.Parent = titleBar
+
+-- Close button
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 20, 0, 20)
+closeButton.Position = UDim2.new(1, -23, 0, 2.5)
+closeButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeButton.BorderSizePixel = 0
+closeButton.Text = "X"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.Font = Enum.Font.GothamBold
+closeButton.TextSize = 12
+closeButton.Parent = titleBar
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 4)
+closeCorner.Parent = closeButton
+
+-- Toggle button
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 180, 0, 30)
+toggleButton.Position = UDim2.new(0.5, -90, 0, 32)
+toggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+toggleButton.BorderSizePixel = 0
+toggleButton.Text = "Lock-On: OFF"
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Font = Enum.Font.Gotham
+toggleButton.TextSize = 11
+toggleButton.Parent = mainFrame
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 6)
+toggleCorner.Parent = toggleButton
+
+-- Circle toggle button
+local circleToggleButton = Instance.new("TextButton")
+circleToggleButton.Size = UDim2.new(0, 180, 0, 30)
+circleToggleButton.Position = UDim2.new(0.5, -90, 0, 68)
+circleToggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+circleToggleButton.BorderSizePixel = 0
+circleToggleButton.Text = "Show Circle: OFF"
+circleToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+circleToggleButton.Font = Enum.Font.Gotham
+circleToggleButton.TextSize = 11
+circleToggleButton.Parent = mainFrame
+
+local circleToggleCorner = Instance.new("UICorner")
+circleToggleCorner.CornerRadius = UDim.new(0, 6)
+circleToggleCorner.Parent = circleToggleButton
+
+-- Circle size label
+local sizeLabel = Instance.new("TextLabel")
+sizeLabel.Size = UDim2.new(1, -10, 0, 20)
+sizeLabel.Position = UDim2.new(0, 5, 0, 104)
+sizeLabel.BackgroundTransparency = 1
+sizeLabel.Text = "Circle Size: 100"
+sizeLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+sizeLabel.Font = Enum.Font.Gotham
+sizeLabel.TextSize = 10
+sizeLabel.Parent = mainFrame
+
+-- Circle size slider
+local sliderFrame = Instance.new("Frame")
+sliderFrame.Size = UDim2.new(0, 180, 0, 20)
+sliderFrame.Position = UDim2.new(0.5, -90, 0, 125)
+sliderFrame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+sliderFrame.BorderSizePixel = 0
+sliderFrame.Parent = mainFrame
+
+local sliderCorner = Instance.new("UICorner")
+sliderCorner.CornerRadius = UDim.new(0, 10)
+sliderCorner.Parent = sliderFrame
+
+local sliderFill = Instance.new("Frame")
+sliderFill.Size = UDim2.new(0.5, 0, 1, 0)
+sliderFill.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+sliderFill.BorderSizePixel = 0
+sliderFill.Parent = sliderFrame
+
+local sliderFillCorner = Instance.new("UICorner")
+sliderFillCorner.CornerRadius = UDim.new(0, 10)
+sliderFillCorner.Parent = sliderFill
+
+-- Status label
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -10, 0, 20)
+statusLabel.Position = UDim2.new(0, 5, 0, 153)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Hold RMB to lock onto target"
+statusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextSize = 10
+statusLabel.Parent = mainFrame
+
+-- Create FOV circle
+local circleGui = Instance.new("ScreenGui")
+circleGui.Name = "FOVCircle"
+circleGui.ResetOnSpawn = false
+circleGui.Parent = playerGui
+
+local circle = Instance.new("Frame")
+circle.Size = UDim2.new(0, 200, 0, 200)
+circle.Position = UDim2.new(0.5, -100, 0.5, -100)
+circle.BackgroundTransparency = 1
+circle.Visible = false
+circle.Parent = circleGui
+
+local circleOutline = Instance.new("ImageLabel")
+circleOutline.Size = UDim2.new(1, 0, 1, 0)
+circleOutline.BackgroundTransparency = 1
+circleOutline.Image = "rbxassetid://12201347372"
+circleOutline.ImageColor3 = Color3.fromRGB(255, 255, 255)
+circleOutline.ImageTransparency = 0.5
+circleOutline.Parent = circle
+
+-- State variables
+local isEnabled = false
+local showCircle = false
+local isRightMouseHeld = false
+local lockConnection = nil
+local currentTarget = nil
+local circleSize = 100 -- Radius in pixels from center
+local humanoidCache = {} -- Cache for humanoids
+local cacheUpdateInterval = 0.5 -- Update cache every 0.5 seconds
+local lastCacheUpdate = 0
+
+-- Function to check if teams are being used
+local function teamsEnabled()
+    return #Teams:GetTeams() > 0
+end
+
+-- Function to check if two players are on the same team
+local function areOnSameTeam(player1, player2)
+    if not teamsEnabled() then
+        return false -- No teams means everyone is an enemy
+    end
+    
+    -- Check if both players have teams and if they're the same
+    if player1.Team and player2.Team then
+        return player1.Team == player2.Team
+    end
+    
+    return false -- If either player doesn't have a team, treat as different teams
+end
+
+-- Function to check if a point is inside the circle
+local function isInsideCircle(screenPosition)
+    local centerX = camera.ViewportSize.X / 2
+    local centerY = camera.ViewportSize.Y / 2
+    local distance = math.sqrt((screenPosition.X - centerX)^2 + (screenPosition.Y - centerY)^2)
+    return distance <= circleSize
+end
+
+-- Function to check if a character belongs to a teammate
+local function isTeammate(character)
+    if not character then return false end
+    
+    -- Check if it's a player's character
+    local charPlayer = Players:GetPlayerFromCharacter(character)
+    if charPlayer then
+        -- It's a player, check if they're on our team
+        if charPlayer == player then
+            return true -- Don't target ourselves
+        end
+        return areOnSameTeam(player, charPlayer)
+    end
+    
+    -- Not a player character (NPC), so it's targetable
+    return false
+end
+
+-- Function to update humanoid cache
+local function updateHumanoidCache()
+    humanoidCache = {}
+    
+    for _, descendant in pairs(workspace:GetDescendants()) do
+        if descendant:IsA("Humanoid") and descendant.Health > 0 then
+            local targetCharacter = descendant.Parent
+            if targetCharacter and targetCharacter:FindFirstChild("Head") and targetCharacter:FindFirstChild("HumanoidRootPart") then
+                table.insert(humanoidCache, targetCharacter)
+            end
+        end
+    end
+end
+
+-- Function to find nearest humanoid inside circle
+local function findNearestHumanoidInCircle()
+    local character = player.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then
+        return nil
+    end
+    
+    local currentTime = tick()
+    -- Update cache periodically
+    if currentTime - lastCacheUpdate > cacheUpdateInterval then
+        updateHumanoidCache()
+        lastCacheUpdate = currentTime
+    end
+    
+    local myPosition = character.HumanoidRootPart.Position
+    local nearestCharacter = nil
+    local shortestDistance = math.huge
+    
+    -- Search through cached humanoids
+    for _, targetCharacter in ipairs(humanoidCache) do
+        if targetCharacter and targetCharacter.Parent and not isTeammate(targetCharacter) then
+            local humanoid = targetCharacter:FindFirstChild("Humanoid")
+            local head = targetCharacter:FindFirstChild("Head")
+            
+            if humanoid and humanoid.Health > 0 and head then
+                -- Check if head is on screen and inside circle
+                local headPosition = head.Position
+                local screenPoint, onScreen = camera:WorldToViewportPoint(headPosition)
+                
+                if onScreen and isInsideCircle(Vector2.new(screenPoint.X, screenPoint.Y)) then
+                    local distance = (myPosition - targetCharacter.HumanoidRootPart.Position).Magnitude
+                    
+                    if distance < shortestDistance then
+                        shortestDistance = distance
+                        nearestCharacter = targetCharacter
+                    end
+                end
+            end
+        end
+    end
+    
+    return nearestCharacter
+end
+
+-- Function to update circle size
+local function updateCircleSize()
+    local diameter = circleSize * 2
+    circle.Size = UDim2.new(0, diameter, 0, diameter)
+    circle.Position = UDim2.new(0.5, -circleSize, 0.5, -circleSize)
+    sizeLabel.Text = "Circle Size: " .. circleSize
+end
+
+-- Function to lock camera onto target
+local function lockCameraOnTarget()
+    if lockConnection then
+        lockConnection:Disconnect()
+    end
+    
+    lockConnection = RunService.RenderStepped:Connect(function()
+        if isEnabled and isRightMouseHeld then
+            -- Find target if we don't have one or if current target is invalid
+            if not currentTarget or not currentTarget:FindFirstChild("Head") then
+                currentTarget = findNearestHumanoidInCircle()
+            else
+                -- Check if current target is still valid (not a teammate, still in circle)
+                if isTeammate(currentTarget) then
+                    currentTarget = findNearestHumanoidInCircle()
+                else
+                    local targetHead = currentTarget.Head
+                    local screenPoint, onScreen = camera:WorldToViewportPoint(targetHead.Position)
+                    if not onScreen or not isInsideCircle(Vector2.new(screenPoint.X, screenPoint.Y)) then
+                        currentTarget = findNearestHumanoidInCircle()
+                    end
+                end
+            end
+            
+            if currentTarget and currentTarget:FindFirstChild("Head") then
+                local targetHead = currentTarget.Head
+                
+                -- Check if target is still alive
+                local humanoid = currentTarget:FindFirstChild("Humanoid")
+                if humanoid and humanoid.Health > 0 then
+                    -- Smoothly look at target's head
+                    local targetPosition = targetHead.Position
+                    camera.CFrame = CFrame.new(camera.CFrame.Position, targetPosition)
+                    
+                    -- Show player name if it's a player, otherwise show "NPC"
+                    local targetPlayer = Players:GetPlayerFromCharacter(currentTarget)
+                    local targetName = targetPlayer and targetPlayer.Name or "NPC"
+                    statusLabel.Text = "🎯 Locked: " .. targetName
+                else
+                    currentTarget = nil
+                    statusLabel.Text = "Hold RMB to lock onto target"
+                end
+            else
+                statusLabel.Text = "No target in circle"
+            end
+        else
+            statusLabel.Text = "Hold RMB to lock onto target"
+            currentTarget = nil
+        end
+    end)
+end
+
+-- Function to stop camera lock
+local function stopCameraLock()
+    if lockConnection then
+        lockConnection:Disconnect()
+        lockConnection = nil
+    end
+    currentTarget = nil
+    statusLabel.Text = "Hold RMB to lock onto target"
+end
+
+-- Toggle button functionality
+toggleButton.MouseButton1Click:Connect(function()
+    isEnabled = not isEnabled
+    
+    if isEnabled then
+        toggleButton.Text = "Lock-On: ON"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+        lockCameraOnTarget()
+    else
+        toggleButton.Text = "Lock-On: OFF"
+        toggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        stopCameraLock()
+    end
+end)
+
+-- Circle toggle functionality
+circleToggleButton.MouseButton1Click:Connect(function()
+    showCircle = not showCircle
+    
+    if showCircle then
+        circleToggleButton.Text = "Show Circle: ON"
+        circleToggleButton.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
+        circle.Visible = true
+    else
+        circleToggleButton.Text = "Show Circle: OFF"
+        circleToggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        circle.Visible = false
+    end
+end)
+
+-- Slider functionality
+local draggingSlider = false
+sliderFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        draggingSlider = true
+    end
+end)
+
+sliderFrame.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        draggingSlider = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if draggingSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local mousePos = UserInputService:GetMouseLocation()
+        local relativePos = mousePos.X - sliderFrame.AbsolutePosition.X
+        local percentage = math.clamp(relativePos / sliderFrame.AbsoluteSize.X, 0, 1)
+        
+        sliderFill.Size = UDim2.new(percentage, 0, 1, 0)
+        
+        -- Update circle size (50 to 400 pixels)
+        circleSize = math.floor(50 + (percentage * 350))
+        updateCircleSize()
+    end
+end)
+
+-- Close button functionality
+closeButton.MouseButton1Click:Connect(function()
+    stopCameraLock()
+    controlGui:Destroy()
+    circleGui:Destroy()
+end)
+
+-- Right mouse button detection
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        isRightMouseHeld = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        isRightMouseHeld = false
+    end
+end)
+
+-- Dragging functionality
+local dragging = false
+local dragInput, mousePos, framePos
+
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        mousePos = input.Position
+        framePos = mainFrame.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+titleBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - mousePos
+        mainFrame.Position = UDim2.new(
+            framePos.X.Scale,
+            framePos.X.Offset + delta.X,
+            framePos.Y.Scale,
+            framePos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+-- Initialize circle size
+updateCircleSize()
