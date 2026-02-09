@@ -58,6 +58,31 @@ screenGui.Name = "FootballControlGUI"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
+-- Minimized Button (Soccer Ball Icon)
+local minimizedButton = Instance.new("TextButton")
+minimizedButton.Name = "MinimizedButton"
+minimizedButton.Size = UDim2.new(0, 60, 0, 60)
+minimizedButton.Position = UDim2.new(0, 20, 0.5, -30)
+minimizedButton.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+minimizedButton.BorderSizePixel = 0
+minimizedButton.Text = "⚽"
+minimizedButton.TextSize = 32
+minimizedButton.Font = Enum.Font.GothamBold
+minimizedButton.Visible = false
+minimizedButton.Active = true
+minimizedButton.Draggable = true
+minimizedButton.Parent = screenGui
+
+local minimizedCorner = Instance.new("UICorner")
+minimizedCorner.CornerRadius = UDim.new(1, 0)  -- Circular
+minimizedCorner.Parent = minimizedButton
+
+-- Add shadow/border effect to minimized button
+local minimizedStroke = Instance.new("UIStroke")
+minimizedStroke.Color = Color3.fromRGB(52, 152, 219)
+minimizedStroke.Thickness = 3
+minimizedStroke.Parent = minimizedButton
+
 -- Main Frame
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
@@ -87,7 +112,7 @@ titleCorner.Parent = titleBar
 
 -- Title Text
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -50, 1, 0)
+title.Size = UDim2.new(1, -90, 1, 0)
 title.Position = UDim2.new(0, 10, 0, 0)
 title.BackgroundTransparency = 1
 title.Text = "⚽ Ball Control"
@@ -96,6 +121,22 @@ title.TextSize = 16
 title.Font = Enum.Font.GothamBold
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = titleBar
+
+-- Minimize Button
+local minimizeButton = Instance.new("TextButton")
+minimizeButton.Size = UDim2.new(0, 30, 0, 30)
+minimizeButton.Position = UDim2.new(1, -70, 0, 5)
+minimizeButton.BackgroundColor3 = Color3.fromRGB(241, 196, 15)
+minimizeButton.BorderSizePixel = 0
+minimizeButton.Text = "−"
+minimizeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+minimizeButton.TextSize = 20
+minimizeButton.Font = Enum.Font.GothamBold
+minimizeButton.Parent = titleBar
+
+local minimizeCorner = Instance.new("UICorner")
+minimizeCorner.CornerRadius = UDim.new(0, 6)
+minimizeCorner.Parent = minimizeButton
 
 -- Close Button
 local closeButton = Instance.new("TextButton")
@@ -453,6 +494,17 @@ end
 closeButton.MouseButton1Click:Connect(function()
     stopControl()
     screenGui:Destroy()
+end)
+
+-- Minimize/Maximize functionality
+minimizeButton.MouseButton1Click:Connect(function()
+    mainFrame.Visible = false
+    minimizedButton.Visible = true
+end)
+
+minimizedButton.MouseButton1Click:Connect(function()
+    minimizedButton.Visible = false
+    mainFrame.Visible = true
 end)
 
 boostToggle.MouseButton1Click:Connect(function()
