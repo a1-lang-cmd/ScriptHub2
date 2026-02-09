@@ -1,0 +1,644 @@
+-- LocalScript
+local player = game.Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- ADD YOUR BALL NAMES HERE
+local BALL_NAMES = {"Football", "SoccerBall", "Ball", "Basketball", "TennisBall"}
+
+local footballReference = nil
+local isHolding = false
+local boostEnabled = true
+local flyControlEnabled = false
+local boostMultiplier = 2.5
+local flySpeed = 80
+local inputChangedConnection = nil
+
+local controlActive = false
+local cameraConnection = nil
+local controlConnection = nil
+local characterLockConnection = nil
+
+-- Character lock storage
+local originalPosition = nil
+
+-- Camera settings
+local CAMERA_DISTANCE = 15
+local CAMERA_HEIGHT = 8
+local cameraAngleX = 0
+local cameraAngleY = 0
+
+-- Movement tracking
+local keysPressed = {
+    W = false, A = false, S = false, D = false,
+    Space = false, LeftShift = false
+}
+
+-- Character references (will be updated on respawn)
+local character = nil
+local humanoid = nil
+local rootPart = nil
+local camera = workspace.CurrentCamera
+
+-- Track monitored balls to prevent duplicate monitoring
+local monitoredBalls = {}
+
+-- Helper function to check if object is a ball
+local function isBall(object)
+    if not object:IsA("BasePart") then return false end
+    for _, name in ipairs(BALL_NAMES) do
+        if object.Name == name then return true end
+    end
+    return false
+end
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "FootballControlGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Main Frame
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0, 280, 0, 220)
+mainFrame.Position = UDim2.new(0.5, -140, 0, 20)
+mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 10)
+mainCorner.Parent = mainFrame
+
+-- Title Bar
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0, 40)
+titleBar.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 10)
+titleCorner.Parent = titleBar
+
+-- Title Text
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -50, 1, 0)
+title.Position = UDim2.new(0, 10, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "⚽ Ball Control"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 16
+title.Font = Enum.Font.GothamBold
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = titleBar
+
+-- Close Button
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.new(0, 30, 0, 30)
+closeButton.Position = UDim2.new(1, -35, 0, 5)
+closeButton.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+closeButton.BorderSizePixel = 0
+closeButton.Text = "×"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.TextSize = 20
+closeButton.Font = Enum.Font.GothamBold
+closeButton.Parent = titleBar
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = closeButton
+
+-- Boost Toggle
+local boostToggle = Instance.new("TextButton")
+boostToggle.Size = UDim2.new(0, 250, 0, 32)
+boostToggle.Position = UDim2.new(0, 15, 0, 50)
+boostToggle.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+boostToggle.BorderSizePixel = 0
+boostToggle.Text = "✓ Kick Boost: ENABLED"
+boostToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+boostToggle.TextSize = 13
+boostToggle.Font = Enum.Font.GothamBold
+boostToggle.Parent = mainFrame
+
+local boostCorner = Instance.new("UICorner")
+boostCorner.CornerRadius = UDim.new(0, 6)
+boostCorner.Parent = boostToggle
+
+-- Fly Control Toggle
+local flyToggle = Instance.new("TextButton")
+flyToggle.Size = UDim2.new(0, 250, 0, 32)
+flyToggle.Position = UDim2.new(0, 15, 0, 90)
+flyToggle.BackgroundColor3 = Color3.fromRGB(52, 152, 219)
+flyToggle.BorderSizePixel = 0
+flyToggle.Text = "✓ Fly Control: ENABLED"
+flyToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+flyToggle.TextSize = 13
+flyToggle.Font = Enum.Font.GothamBold
+flyToggle.Parent = mainFrame
+
+local flyCorner = Instance.new("UICorner")
+flyCorner.CornerRadius = UDim.new(0, 6)
+flyCorner.Parent = flyToggle
+
+-- Kick Power Section
+local powerLabel = Instance.new("TextLabel")
+powerLabel.Size = UDim2.new(0, 90, 0, 25)
+powerLabel.Position = UDim2.new(0, 15, 0, 132)
+powerLabel.BackgroundTransparency = 1
+powerLabel.Text = "Kick Power:"
+powerLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+powerLabel.TextSize = 12
+powerLabel.Font = Enum.Font.Gotham
+powerLabel.TextXAlignment = Enum.TextXAlignment.Left
+powerLabel.Parent = mainFrame
+
+local powerInput = Instance.new("TextBox")
+powerInput.Size = UDim2.new(0, 60, 0, 28)
+powerInput.Position = UDim2.new(0, 110, 0, 130)
+powerInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+powerInput.BorderSizePixel = 0
+powerInput.Text = "2.5"
+powerInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+powerInput.TextSize = 13
+powerInput.Font = Enum.Font.GothamBold
+powerInput.ClearTextOnFocus = false
+powerInput.Parent = mainFrame
+
+local powerCorner = Instance.new("UICorner")
+powerCorner.CornerRadius = UDim.new(0, 4)
+powerCorner.Parent = powerInput
+
+-- Fly Speed Section
+local speedLabel = Instance.new("TextLabel")
+speedLabel.Size = UDim2.new(0, 90, 0, 25)
+speedLabel.Position = UDim2.new(0, 15, 0, 167)
+speedLabel.BackgroundTransparency = 1
+speedLabel.Text = "Fly Speed:"
+speedLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+speedLabel.TextSize = 12
+speedLabel.Font = Enum.Font.Gotham
+speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+speedLabel.Parent = mainFrame
+
+local speedInput = Instance.new("TextBox")
+speedInput.Size = UDim2.new(0, 60, 0, 28)
+speedInput.Position = UDim2.new(0, 110, 0, 165)
+speedInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+speedInput.BorderSizePixel = 0
+speedInput.Text = "80"
+speedInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+speedInput.TextSize = 13
+speedInput.Font = Enum.Font.GothamBold
+speedInput.ClearTextOnFocus = false
+speedInput.Parent = mainFrame
+
+local speedCorner = Instance.new("UICorner")
+speedCorner.CornerRadius = UDim.new(0, 4)
+speedCorner.Parent = speedInput
+
+-- Apply Button
+local applyButton = Instance.new("TextButton")
+applyButton.Size = UDim2.new(0, 80, 0, 63)
+applyButton.Position = UDim2.new(0, 185, 0, 130)
+applyButton.BackgroundColor3 = Color3.fromRGB(155, 89, 182)
+applyButton.BorderSizePixel = 0
+applyButton.Text = "APPLY"
+applyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+applyButton.TextSize = 13
+applyButton.Font = Enum.Font.GothamBold
+applyButton.Parent = mainFrame
+
+local applyCorner = Instance.new("UICorner")
+applyCorner.CornerRadius = UDim.new(0, 6)
+applyCorner.Parent = applyButton
+
+-- Status Label
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -30, 0, 20)
+statusLabel.Position = UDim2.new(0, 15, 0, 198)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Ready | Mouse to look | WASD + Space/Shift"
+statusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+statusLabel.TextSize = 10
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Parent = mainFrame
+
+-- Control Indicator (shows when flying)
+local controlIndicator = Instance.new("Frame")
+controlIndicator.Size = UDim2.new(0, 220, 0, 50)
+controlIndicator.Position = UDim2.new(0.5, -110, 1, -60)
+controlIndicator.BackgroundColor3 = Color3.fromRGB(52, 152, 219)
+controlIndicator.BorderSizePixel = 0
+controlIndicator.Visible = false
+controlIndicator.Parent = screenGui
+
+local indicatorCorner = Instance.new("UICorner")
+indicatorCorner.CornerRadius = UDim.new(0, 8)
+indicatorCorner.Parent = controlIndicator
+
+local indicatorText = Instance.new("TextLabel")
+indicatorText.Size = UDim2.new(1, 0, 1, 0)
+indicatorText.BackgroundTransparency = 1
+indicatorText.Text = "🎮 CONTROLLING BALL\nMouse to look | Q to release"
+indicatorText.TextColor3 = Color3.fromRGB(255, 255, 255)
+indicatorText.TextSize = 12
+indicatorText.Font = Enum.Font.GothamBold
+indicatorText.Parent = controlIndicator
+
+-- Functions
+local function lockCharacter()
+    if not humanoid or not rootPart then return end
+    
+    originalPosition = rootPart.CFrame
+    
+    humanoid.WalkSpeed = 0
+    humanoid.JumpPower = 0
+    humanoid.JumpHeight = 0
+    
+    characterLockConnection = RunService.Heartbeat:Connect(function()
+        if originalPosition and rootPart and rootPart.Parent then
+            rootPart.CFrame = originalPosition
+            rootPart.AssemblyLinearVelocity = Vector3.zero
+            rootPart.AssemblyAngularVelocity = Vector3.zero
+        end
+    end)
+end
+
+local function unlockCharacter()
+    if not humanoid then return end
+    
+    humanoid.WalkSpeed = 16
+    humanoid.JumpPower = 50
+    humanoid.JumpHeight = 7.2
+    
+    if characterLockConnection then
+        characterLockConnection:Disconnect()
+        characterLockConnection = nil
+    end
+    
+    originalPosition = nil
+end
+
+local function stopControl()
+    if not controlActive then return end
+    
+    controlActive = false
+    camera.CameraType = Enum.CameraType.Custom
+    controlIndicator.Visible = false
+    UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+    
+    unlockCharacter()
+    
+    if cameraConnection then
+        cameraConnection:Disconnect()
+        cameraConnection = nil
+    end
+    
+    if controlConnection then
+        controlConnection:Disconnect()
+        controlConnection = nil
+    end
+    
+    if footballReference and footballReference.Parent == workspace then
+        footballReference.AssemblyLinearVelocity = Vector3.zero
+    end
+    
+    statusLabel.Text = "Control released"
+    statusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    
+    cameraAngleX = 0
+    cameraAngleY = 0
+end
+
+local function startControl(football)
+    if controlActive or not flyControlEnabled then return end
+    
+    controlActive = true
+    footballReference = football
+    camera.CameraType = Enum.CameraType.Scriptable
+    controlIndicator.Visible = true
+    UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
+    
+    lockCharacter()
+    
+    statusLabel.Text = "🎮 Flying the ball! (Character locked)"
+    statusLabel.TextColor3 = Color3.fromRGB(52, 152, 219)
+    
+    cameraAngleX = 0
+    cameraAngleY = 0
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if not controlActive then return end
+        
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            local delta = input.Delta
+            cameraAngleX = cameraAngleX - delta.X * 0.005
+            cameraAngleY = math.clamp(cameraAngleY - delta.Y * 0.005, -1.4, 1.4)
+        end
+    end)
+    
+    cameraConnection = RunService.RenderStepped:Connect(function()
+        if not footballReference or footballReference.Parent ~= workspace then
+            stopControl()
+            return
+        end
+        
+        local ballPos = footballReference.Position
+        
+        local rotationCFrame = CFrame.Angles(0, cameraAngleX, 0) * CFrame.Angles(cameraAngleY, 0, 0)
+        local offset = rotationCFrame * Vector3.new(0, CAMERA_HEIGHT, CAMERA_DISTANCE)
+        
+        camera.CFrame = CFrame.new(ballPos + offset, ballPos)
+    end)
+    
+    controlConnection = RunService.Heartbeat:Connect(function()
+        if not footballReference or footballReference.Parent ~= workspace then
+            stopControl()
+            return
+        end
+        
+        local cameraCFrame = camera.CFrame
+        local forward = (cameraCFrame.LookVector * Vector3.new(1, 0, 1)).Unit
+        local right = cameraCFrame.RightVector
+        
+        local movement = Vector3.zero
+        
+        if keysPressed.W then movement = movement + forward end
+        if keysPressed.S then movement = movement - forward end
+        if keysPressed.D then movement = movement + right end
+        if keysPressed.A then movement = movement - right end
+        if keysPressed.Space then movement = movement + Vector3.new(0, 1, 0) end
+        if keysPressed.LeftShift then movement = movement + Vector3.new(0, -1, 0) end
+        
+        if movement.Magnitude > 0 then
+            movement = movement.Unit * flySpeed
+        end
+        
+        footballReference.AssemblyLinearVelocity = movement
+    end)
+end
+
+-- COMPLETELY REWRITTEN BOOST FUNCTION - Uses Velocity Changed Connection
+local function applyBoost(ball)
+    if not boostEnabled then 
+        print("Boost disabled, skipping")
+        return 
+    end
+    
+    print("🚀 Setting up velocity monitor for boost...")
+    
+    local boostApplied = false
+    local startTime = tick()
+    local timeout = 2 -- 2 second timeout
+    
+    -- Monitor velocity changes in real-time
+    local velocityConnection
+    velocityConnection = RunService.Heartbeat:Connect(function()
+        -- Timeout check
+        if tick() - startTime > timeout then
+            if not boostApplied then
+                print("⏱️ Boost timeout - no velocity detected")
+                statusLabel.Text = "Boost timeout"
+                statusLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
+            end
+            velocityConnection:Disconnect()
+            return
+        end
+        
+        -- Check if ball is still valid
+        if not ball or not ball.Parent then
+            velocityConnection:Disconnect()
+            return
+        end
+        
+        local currentVelocity = ball.AssemblyLinearVelocity
+        
+        -- If we detect ANY velocity greater than 5 studs/sec, boost it!
+        if currentVelocity.Magnitude > 5 and not boostApplied then
+            boostApplied = true
+            
+            -- Apply boost
+            local boostedVelocity = currentVelocity * boostMultiplier
+            ball.AssemblyLinearVelocity = boostedVelocity
+            
+            print(string.format("💥 BOOST APPLIED! %.1f → %.1f studs/s (%.1fx)", 
+                currentVelocity.Magnitude, 
+                boostedVelocity.Magnitude, 
+                boostMultiplier))
+            
+            statusLabel.Text = string.format("⚡ Boosted %.1fx!", boostMultiplier)
+            statusLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
+            
+            -- Disconnect after applying boost
+            velocityConnection:Disconnect()
+            
+            -- Start fly control after successful boost
+            if flyControlEnabled then
+                task.wait(0.1)
+                startControl(ball)
+            end
+        end
+    end)
+    
+    return true
+end
+
+-- Button handlers
+closeButton.MouseButton1Click:Connect(function()
+    stopControl()
+    screenGui:Destroy()
+end)
+
+boostToggle.MouseButton1Click:Connect(function()
+    boostEnabled = not boostEnabled
+    
+    if boostEnabled then
+        boostToggle.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+        boostToggle.Text = "✓ Kick Boost: ENABLED"
+    else
+        boostToggle.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+        boostToggle.Text = "✗ Kick Boost: DISABLED"
+    end
+end)
+
+flyToggle.MouseButton1Click:Connect(function()
+    flyControlEnabled = not flyControlEnabled
+    
+    if flyControlEnabled then
+        flyToggle.BackgroundColor3 = Color3.fromRGB(52, 152, 219)
+        flyToggle.Text = "✓ Fly Control: ENABLED"
+    else
+        flyToggle.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+        flyToggle.Text = "✗ Fly Control: DISABLED"
+        stopControl()
+    end
+end)
+
+applyButton.MouseButton1Click:Connect(function()
+    local powerValue = tonumber(powerInput.Text)
+    local speedValue = tonumber(speedInput.Text)
+    
+    local success = true
+    
+    if powerValue and powerValue > 0 and powerValue <= 100 then
+        boostMultiplier = powerValue
+    else
+        success = false
+    end
+    
+    if speedValue and speedValue > 0 and speedValue <= 500 then
+        flySpeed = speedValue
+    else
+        success = false
+    end
+    
+    if success then
+        statusLabel.Text = string.format("Power: %.1fx | Speed: %d", boostMultiplier, flySpeed)
+        statusLabel.TextColor3 = Color3.fromRGB(46, 204, 113)
+        
+        applyButton.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+        task.wait(0.2)
+        applyButton.BackgroundColor3 = Color3.fromRGB(155, 89, 182)
+    else
+        statusLabel.Text = "Invalid values!"
+        statusLabel.TextColor3 = Color3.fromRGB(231, 76, 60)
+        
+        applyButton.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+        task.wait(0.2)
+        applyButton.BackgroundColor3 = Color3.fromRGB(155, 89, 182)
+    end
+end)
+
+-- Input handling
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed and not controlActive then return end
+    
+    local keyName = input.KeyCode.Name
+    
+    if keysPressed[keyName] ~= nil then
+        keysPressed[keyName] = true
+    end
+    
+    if keyName == "Q" and controlActive then
+        stopControl()
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    local keyName = input.KeyCode.Name
+    if keysPressed[keyName] ~= nil then
+        keysPressed[keyName] = false
+    end
+end)
+
+-- IMPROVED FOOTBALL MONITORING - Prevents duplicate monitoring
+local function monitorFootball(football)
+    -- Check if already monitored
+    if monitoredBalls[football] then
+        print("⚠️ Ball already being monitored, skipping:", football.Name)
+        return
+    end
+    
+    monitoredBalls[football] = true
+    local ballHolding = true
+    
+    print("👀 Monitoring ball:", football.Name)
+    statusLabel.Text = "Ball acquired: " .. football.Name
+    statusLabel.TextColor3 = Color3.fromRGB(241, 196, 15)
+    
+    -- Single detection method - AncestryChanged is most reliable
+    local ancestryConnection
+    
+    ancestryConnection = football.AncestryChanged:Connect(function(child, parent)
+        if football.Parent == workspace and ballHolding then
+            print("🎯 Ball thrown/kicked - applying boost:", football.Name)
+            ballHolding = false
+            ancestryConnection:Disconnect()
+            monitoredBalls[football] = nil
+            
+            -- Apply boost
+            applyBoost(football)
+        end
+    end)
+    
+    -- Cleanup if ball gets destroyed
+    football.Destroying:Connect(function()
+        if ancestryConnection then
+            ancestryConnection:Disconnect()
+        end
+        monitoredBalls[football] = nil
+        print("🗑️ Ball destroyed, stopped monitoring")
+    end)
+end
+
+-- Setup character monitoring
+local function setupCharacter(char)
+    character = char
+    humanoid = character:WaitForChild("Humanoid")
+    rootPart = character:WaitForChild("HumanoidRootPart")
+    
+    print("✓ Character setup complete")
+    statusLabel.Text = "Character loaded - waiting for ball"
+    statusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    
+    -- Stop any active control
+    stopControl()
+    footballReference = nil
+    isHolding = false
+    monitoredBalls = {} -- Clear monitored balls on respawn
+    
+    -- Monitor character for any ball type
+    character.ChildAdded:Connect(function(child)
+        if isBall(child) then
+            print("✓ Ball detected via ChildAdded:", child.Name)
+            footballReference = child
+            isHolding = true
+            monitorFootball(child)
+        end
+    end)
+    
+    -- Check for existing ball immediately
+    task.spawn(function()
+        task.wait(0.1) -- Small delay for character to fully load
+        for _, child in ipairs(character:GetChildren()) do
+            if isBall(child) then
+                print("✓ Ball found on character load:", child.Name)
+                footballReference = child
+                isHolding = true
+                monitorFootball(child)
+                break
+            end
+        end
+    end)
+    
+    -- Cleanup on death
+    humanoid.Died:Connect(function()
+        print("☠️ Character died - cleaning up")
+        stopControl()
+        footballReference = nil
+        isHolding = false
+        monitoredBalls = {}
+    end)
+end
+
+-- Initial character setup
+if player.Character then
+    setupCharacter(player.Character)
+end
+
+-- Handle respawns
+player.CharacterAdded:Connect(function(char)
+    print("🔄 Character respawned - setting up...")
+    setupCharacter(char)
+end)
+
+print("⚽ Ball Control GUI Loaded!")
+print("📋 Supported balls:", table.concat(BALL_NAMES, ", "))
+print("⚡ Kick Power: " .. boostMultiplier .. "x | 🚀 Fly Speed: " .. flySpeed)
+print("🔍 Check F9 console for boost debug info")
