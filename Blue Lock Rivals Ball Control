@@ -56,7 +56,7 @@ end
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "FootballControlGUI"
 screenGui.ResetOnSpawn = false
-screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.Parent = game:GetService("CoreGui")
 
 -- Minimized Button (Soccer Ball Icon)
 local minimizedButton = Instance.new("TextButton")
